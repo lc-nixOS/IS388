@@ -47,5 +47,4 @@ Estudinate1.agregar_nota("Base de Datos",20,4)
 Estudinate1.agregar_nota("algoritmos 1",15,3)
 
 Estudinate1.guardar_en_base_datos()
-Estudinate1.enviar_email_notificacion("Hola mundo")
 print(Estudinate1.generar_reporte_academico())
