@@ -14,7 +14,6 @@ class Estudiante:
             return 0
         suma_ponderada = sum(nota["nota"] * nota["creditos"] for nota in self.notas)
         total_creditos = sum(nota["creditos"] for nota in self.notas)
-
         return suma_ponderada / total_creditos if total_creditos > 0 else 0
 
     def generar_reporte_academico(self):
@@ -23,29 +22,34 @@ class Estudiante:
         reporte += f"Carrera: {self.carrera}\n"
         reporte += f"Email: {self.email}\n\n"
         reporte += "HISTORIAL ACADÉMICO:\n"
+
         for nota_info in self.notas:
-            reporte += f"- {nota_info['curso']}: {nota_info['nota']} "
+            reporte += f" {nota_info['curso']}: {nota_info['nota']} "
             reporte += f"({nota_info['creditos']} créditos)\n"
+
         reporte += f"\nPromedio Ponderado: {self.calcular_promedio_ponderado():.2f}"
         return reporte
 
     def enviar_email_notificacion(self, mensaje):
+        # Simulación de envio de email
         print(f"Enviando email a {self.email}: {mensaje}")
+        # Aquí iría la lógica real de envío
         return True
 
     def guardar_en_base_datos(self):
         # Simulación de guardado en BD
         print(f"Guardando estudiante {self.codigo} en base de datos...")
+        # Aqui iría la lógica real de persistencia
         return True
 
 
-Estudinate1 = Estudiante(
-    "27150415", "Pelayo Quispe Bautista", "pelayo.quispeunsch.edu.pe", "Ing. Sistemas"
+Estudiante1 = Estudiante(
+    "27202506", "Isaias Ramos Lopez", "isaias.ramos.27@unsch.edu.pe", "ing de sistemas"
 )
 
-Estudinate1.agregar_nota("Base de Datos", 20, 4)
+Estudiante1.agregar_nota("Base de Datos", 20, 4)
+Estudiante1.agregar_nota("Algoritmos", 15, 3)
 
-Estudinate1.agregar_nota("algoritmos 1", 15, 3)
-
-Estudinate1.guardar_en_base_datos()
-print(Estudinate1.generar_reporte_academico())
+Estudiante1.guardar_en_base_datos()
+Estudiante1.enviar_email_notificacion("Hola mundo")
+print(Estudiante1.generar_reporte_academico())

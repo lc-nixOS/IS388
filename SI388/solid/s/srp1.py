@@ -28,6 +28,7 @@ class CalculadoraPromedio:
     def calcular_promedio_ponderado(notas):
         if not notas:
             return 0
+
         suma_ponderada = sum(nota["nota"] * nota["creditos"] for nota in notas)
         total_creditos = sum(nota["creditos"] for nota in notas)
         return suma_ponderada / total_creditos if total_creditos > 0 else 0
@@ -36,24 +37,47 @@ class CalculadoraPromedio:
 class GeneradorReportes:
     """Responsabilidad única: Generar reportes académicos"""
 
-    def generar_reporte_estudiante(self, estudiante, registro_academico):
+    @staticmethod
+    def generar_reporte_estudiante(_self, estudiante, registro_academico):
         promedio = CalculadoraPromedio.calcular_promedio_ponderado(
             registro_academico.obtener_notas()
         )
+
         reporte = f"=== REPORTE ACADÉMICO UNSCH ===\n"
         reporte += f"Estudiante: {estudiante.nombre} ({estudiante.codigo})\n"
         reporte += f"Carrera: {estudiante.carrera}\n"
         reporte += f"Email: {estudiante.email}\n\n"
         reporte += "HISTORIAL ACADÉMICO:\n"
         for nota_info in registro_academico.obtener_notas():
-            reporte += f"- {nota_info['curso']}: {nota_info['nota']} "
+            reporte += f"{nota_info['curso']}: {nota_info['nota']} "
             reporte += f"({nota_info['creditos']} créditos)\n"
         reporte += f"\nPromedio Ponderado: {promedio:.2f}"
         return reporte
 
 
-estudiante = Estudiante("27150415", "PELAYO", "pelayo.quispe@unsch.edu.pe", "Sistemas")
-registro_academico = RegistroAcademico()
-registro_academico.agregar_nota("Base de Datos", 15, 4)
-reporte = GeneradorReportes().generar_reporte_estudiante(estudiante, registro_academico)
-print(reporte)
+class EnviarEmail:
+    def __init__(self, email):
+        self.email = email
+
+    def enviar_email_notificacion(self, mensaje):
+        # Simulación de envio de email
+        print(f"Enviando email a {self.email}: {mensaje}")
+        # Aquí iría la lógica real de envío
+        return True
+
+
+Estudiante1 = Estudiante(
+    "27202506", "Isaias Ramos Lopez", "isaias.ramos.27@unsch.edu.pe", "ing de sistemas"
+)
+
+registro = RegistroAcademico()
+registro.agregar_nota("Base de Datos", 20, 4)
+registro.agregar_nota("Algoritmos", 15, 3)
+
+print(GeneradorReportes.generar_reporte_estudiante(None, Estudiante1, registro))
+print(
+    f"Promedio Ponderado: {CalculadoraPromedio.calcular_promedio_ponderado(registro.obtener_notas()):.2f}"
+)
+
+notificador = EnviarEmail(Estudiante1.email)
+notificador.enviar_email_notificacion("Hola mundo")
