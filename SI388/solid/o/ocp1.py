@@ -24,5 +24,6 @@ class CalculadorMatricula:
     def calcular_costo(tipo_estudiante: TipoEstudiante):
         return tipo_estudiante.calcular_costo()
 
-ca=CalculadorMatricula()
+
+ca = CalculadorMatricula()
 print(ca.calcular_costo(Doctorado()))
