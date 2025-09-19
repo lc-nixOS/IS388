@@ -25,5 +25,19 @@ class CalculadorMatricula:
         return tipo_estudiante.calcular_costo()
 
 
-ca = CalculadorMatricula()
-print(ca.calcular_costo(Doctorado()))
+if __name__ == "__main__":
+    pregrado = Pregrado()
+    maestria = Maestria()
+    doctorado = Doctorado()
+
+    print("Pago pregrado:", CalculadorMatricula.calcular_costo(pregrado))
+    print("Pago maestría:", CalculadorMatricula.calcular_costo(maestria))
+    print("Pago doctorado:", CalculadorMatricula.calcular_costo(doctorado))
+
+    # Agregar un nuevo tipo sin modificar código existente
+    class Especializacion(TipoEstudiante):
+        def calcular_costo(self):
+            return 1000
+
+    especializacion = Especializacion()
+    print("Pago especialización:", CalculadorMatricula.calcular_costo(especializacion))

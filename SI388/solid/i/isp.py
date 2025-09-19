@@ -24,7 +24,10 @@ class ServicioAcademicoCompleto(ABC):
 
 
 # los clientes se ven obligados a implementar métodos que no necesitan
-class ServicoMatriculas(ServicioAcademicoCompleto, ABC):
+class ServicoMatriculas(ServicioAcademicoCompleto):
+    def gestionar_aulas(self, aula, operacion):
+        pass
+
     def matricular_curso(self, estudiante, curso):
         print(f"Matriculando {estudiante} en el curso {curso}")
 
@@ -37,3 +40,14 @@ class ServicoMatriculas(ServicioAcademicoCompleto, ABC):
 
     def procesar_pagos(self, estudiante, monto):
         raise NotImplementedError("No es responsabilidad de matriculas")
+
+
+if __name__ == "__main__":
+    servicio = ServicoMatriculas()
+    servicio.matricular_curso("Juan", "Matemáticas")
+
+    # Si intentamos usar algo que no le corresponde:
+    try:
+        servicio.procesar_pagos("Juan", 200)
+    except NotImplementedError as e:
+        print(f"Error: {e}")

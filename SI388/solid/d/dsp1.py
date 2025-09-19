@@ -28,11 +28,11 @@ class GeneradorReporteUNSCH:
         self.generador.generar_reporte(datos_estudiantes)
 
 
-# Uso del código
-datos_ejemplo = {"estudiante": "Maria", "curso": "Fisica"}
+if __name__ == "__main__":
+    datos_ejemplo = {"estudiante": "Maria", "curso": "Fisica"}
 
-# Inyectamos la dependencia en el constructor
-generador_pdf = GeneradorReporteUNSCH(GeneradorPDF())
-generador_csv = GeneradorReporteUNSCH(GeneradorCSV())
-generador_pdf.generar_reporte_anual(datos_ejemplo)
-generador_csv.generar_reporte_anual(datos_ejemplo)
+    # Inyectamos la dependencia en el constructor
+    generador_pdf = GeneradorReporteUNSCH(GeneradorPDF())
+    generador_csv = GeneradorReporteUNSCH(GeneradorCSV())
+    generador_pdf.generar_reporte_anual(datos_ejemplo)
+    generador_csv.generar_reporte_anual(datos_ejemplo)

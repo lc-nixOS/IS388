@@ -43,13 +43,17 @@ class Estudiante:
         return True
 
 
-Estudiante1 = Estudiante(
-    "27202506", "Isaias Ramos Lopez", "isaias.ramos.27@unsch.edu.pe", "ing de sistemas"
-)
+if __name__ == "__main__":
+    Estudiante1 = Estudiante(
+        "27202506",
+        "Isaias Ramos Lopez",
+        "isaias.ramos.27@unsch.edu.pe",
+        "ing de sistemas",
+    )
 
-Estudiante1.agregar_nota("Base de Datos", 20, 4)
-Estudiante1.agregar_nota("Algoritmos", 15, 3)
+    Estudiante1.agregar_nota("Base de Datos", 20, 4)
+    Estudiante1.agregar_nota("Algoritmos", 15, 3)
 
-Estudiante1.guardar_en_base_datos()
-Estudiante1.enviar_email_notificacion("Hola mundo")
-print(Estudiante1.generar_reporte_academico())
+    Estudiante1.guardar_en_base_datos()
+    Estudiante1.enviar_email_notificacion("Hola mundo")
+    print(Estudiante1.generar_reporte_academico())

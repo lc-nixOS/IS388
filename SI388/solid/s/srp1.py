@@ -66,18 +66,22 @@ class EnviarEmail:
         return True
 
 
-Estudiante1 = Estudiante(
-    "27202506", "Isaias Ramos Lopez", "isaias.ramos.27@unsch.edu.pe", "ing de sistemas"
-)
+if __name__ == "__main__":
+    Estudiante1 = Estudiante(
+        "27202506",
+        "Isaias Ramos Lopez",
+        "isaias.ramos.27@unsch.edu.pe",
+        "ing de sistemas",
+    )
 
-registro = RegistroAcademico()
-registro.agregar_nota("Base de Datos", 20, 4)
-registro.agregar_nota("Algoritmos", 15, 3)
+    registro = RegistroAcademico()
+    registro.agregar_nota("Base de Datos", 20, 4)
+    registro.agregar_nota("Algoritmos", 15, 3)
 
-print(GeneradorReportes.generar_reporte_estudiante(None, Estudiante1, registro))
-print(
-    f"Promedio Ponderado: {CalculadoraPromedio.calcular_promedio_ponderado(registro.obtener_notas()):.2f}"
-)
+    print(GeneradorReportes.generar_reporte_estudiante(None, Estudiante1, registro))
+    print(
+        f"Promedio Ponderado: {CalculadoraPromedio.calcular_promedio_ponderado(registro.obtener_notas()):.2f}"
+    )
 
-notificador = EnviarEmail(Estudiante1.email)
-notificador.enviar_email_notificacion("Hola mundo")
+    notificador = EnviarEmail(Estudiante1.email)
+    notificador.enviar_email_notificacion("Hola mundo")
