@@ -26,7 +26,7 @@ type Usuario struct {
 	Apellidos string
 	Email     string
 	Tipo      TipoUsuario
-	VenceEn   time.Time // fecha de expiración del carné
+	VenceEn   time.Time
 }
 
 type Carne struct {
@@ -34,7 +34,7 @@ type Carne struct {
 	Propietario Usuario
 	Costo       float64
 	EmitidoEn   time.Time
-	Contenido   []byte // bytes (por ejemplo, PDF simulado)
+	Contenido   []byte
 }
 
 // ------------------------ Componentes con SRP -------------------------------
@@ -50,34 +50,72 @@ func (UserValidator) Validate(_ context.Context, u Usuario) error {
 	}
 	switch u.Tipo {
 	case TipoPregrado, TipoPosgrado, TipoDocente, TipoAdmin, TipoExterno:
-		// OK
 	default:
 		return fmt.Errorf("tipo de usuario no soportado: %s", u.Tipo)
 	}
 	return nil
 }
 
-// 2) Calculador de costo: SOLO calcula el costo según el tipo.
-type CostCalculator struct{}
-
-func (CostCalculator) Calculate(_ context.Context, u Usuario) (float64, error) {
-	switch u.Tipo {
-	case TipoPregrado:
-		return 10.0, nil
-	case TipoPosgrado:
-		return 12.0, nil
-	case TipoDocente:
-		return 8.0, nil
-	case TipoAdmin:
-		return 7.0, nil
-	case TipoExterno:
-		return 20.0, nil
-	default:
-		return 0, fmt.Errorf("no hay tarifa para el tipo: %s", u.Tipo)
-	}
+// PriceStrategy define una estrategia de precio para uno o más tipos de usuario
+type PriceStrategy interface {
+	Supports(t TipoUsuario) bool
+	Calculate(ctx context.Context, u Usuario) (float64, error)
 }
 
-// 3) Generador de carné: SOLO genera el carné (contenido simulado).
+// FlatPriceStrategy: precio fijo para un tipo concreto
+type FlatPriceStrategy struct {
+	Supported TipoUsuario
+	Price     float64
+}
+
+func (s FlatPriceStrategy) Supports(t TipoUsuario) bool { return s.Supported == t }
+func (s FlatPriceStrategy) Calculate(_ context.Context, _ Usuario) (float64, error) {
+	return s.Price, nil
+}
+
+// CompositePriceCalculator: selecciona la primera estrategia que soporte el tipo
+type CompositePriceCalculator struct {
+	strategies []PriceStrategy
+}
+
+func NewCompositePriceCalculator(strategies ...PriceStrategy) *CompositePriceCalculator {
+	return &CompositePriceCalculator{strategies: strategies}
+}
+
+func (c *CompositePriceCalculator) Calculate(ctx context.Context, u Usuario) (float64, error) {
+	for _, s := range c.strategies {
+		if s.Supports(u.Tipo) {
+			return s.Calculate(ctx, u)
+		}
+	}
+	return 0, fmt.Errorf("no hay estrategia de precio para el tipo: %s", u.Tipo)
+}
+
+// (Opcional) Ejemplo de extensión sin tocar el servicio ni otras piezas:
+// HappyHourStudent agrega un descuento temporal a PREGRADO entre horas dadas.
+type HappyHourStudent struct {
+	HourStart int // 0..23
+	HourEnd   int // 0..23 (no inclusivo)
+	Base      float64
+	Discount  float64 // monto fijo a descontar (no negativo)
+}
+
+func (s HappyHourStudent) Supports(t TipoUsuario) bool { return t == TipoPregrado }
+func (s HappyHourStudent) Calculate(_ context.Context, _ Usuario) (float64, error) {
+	now := time.Now()
+	h := now.Hour()
+	price := s.Base
+	if h >= s.HourStart && h < s.HourEnd {
+		if s.Discount > price {
+			price = 0
+		} else {
+			price -= s.Discount
+		}
+	}
+	return price, nil
+}
+
+// 3) Generador de carné (SRP): SOLO genera el carné
 type CardGenerator struct{}
 
 func (CardGenerator) Generate(_ context.Context, u Usuario, costo float64) (Carne, error) {
@@ -95,7 +133,7 @@ func (CardGenerator) Generate(_ context.Context, u Usuario, costo float64) (Carn
 	return c, nil
 }
 
-// 4) Repositorio PostgreSQL: SOLO persiste datos (simulado).
+// 4) Repositorio PostgreSQL (SRP): SOLO persiste (simulado)
 type PgRepository struct {
 	pgDSN string
 }
@@ -116,7 +154,7 @@ func (r PgRepository) SaveCard(_ context.Context, c Carne) error {
 	return nil
 }
 
-// 5) Notificador por email: SOLO envía correo (simulado).
+// 5) Notificador (SRP): SOLO envía email (simulado)
 type EmailNotifier struct {
 	smtpHost string
 	smtpUser string
@@ -129,7 +167,7 @@ func (n EmailNotifier) Send(_ context.Context, to string, subject string, body s
 	return nil
 }
 
-// 6) Impresora: SOLO imprime el carné (simulado).
+// 6) Impresora (SRP): SOLO imprime (simulado)
 type Printer struct {
 	printerName string
 }
@@ -142,9 +180,13 @@ func (p Printer) Print(_ context.Context, c Carne) error {
 
 // ------------------------- Orquestador (Caso de uso) ------------------------
 
+type priceCalculator interface {
+	Calculate(ctx context.Context, u Usuario) (float64, error)
+}
+
 type GestorCarneService struct {
 	validator UserValidator
-	costCalc  CostCalculator
+	pricing   priceCalculator
 	generator CardGenerator
 	repo      PgRepository
 	notifier  EmailNotifier
@@ -153,7 +195,7 @@ type GestorCarneService struct {
 
 func NewGestorCarneService(
 	validator UserValidator,
-	costCalc CostCalculator,
+	pricing priceCalculator,
 	generator CardGenerator,
 	repo PgRepository,
 	notifier EmailNotifier,
@@ -161,7 +203,7 @@ func NewGestorCarneService(
 ) GestorCarneService {
 	return GestorCarneService{
 		validator: validator,
-		costCalc:  costCalc,
+		pricing:   pricing,
 		generator: generator,
 		repo:      repo,
 		notifier:  notifier,
@@ -170,12 +212,12 @@ func NewGestorCarneService(
 }
 
 func (s GestorCarneService) ProcesarSolicitud(ctx context.Context, u Usuario) (Carne, error) {
-	// 1) Validar datos
+	// 1) Validar
 	if err := s.validator.Validate(ctx, u); err != nil {
 		return Carne{}, fmt.Errorf("validación fallida: %w", err)
 	}
-	// 2) Calcular costo
-	costo, err := s.costCalc.Calculate(ctx, u)
+	// 2) Calcular costo (OCP vía estrategias)
+	costo, err := s.pricing.Calculate(ctx, u)
 	if err != nil {
 		return Carne{}, fmt.Errorf("cálculo de costo falló: %w", err)
 	}
@@ -184,7 +226,7 @@ func (s GestorCarneService) ProcesarSolicitud(ctx context.Context, u Usuario) (C
 	if err != nil {
 		return Carne{}, fmt.Errorf("generación de carné falló: %w", err)
 	}
-	// 4) Persistir (usuario y carné)
+	// 4) Persistir
 	if err := s.repo.SaveUser(ctx, u); err != nil {
 		return Carne{}, fmt.Errorf("persistencia de usuario falló: %w", err)
 	}
@@ -208,9 +250,18 @@ func (s GestorCarneService) ProcesarSolicitud(ctx context.Context, u Usuario) (C
 func main() {
 	ctx := context.Background()
 
-	// Componentes (cada uno con UNA responsabilidad)
+	// Estrategias base (fácil de extender sin modificar nada del servicio)
+	pricing := NewCompositePriceCalculator(
+		FlatPriceStrategy{Supported: TipoPregrado, Price: 10.0},
+		FlatPriceStrategy{Supported: TipoPosgrado, Price: 12.0},
+		FlatPriceStrategy{Supported: TipoDocente, Price: 8.0},
+		FlatPriceStrategy{Supported: TipoAdmin, Price: 7.0},
+		FlatPriceStrategy{Supported: TipoExterno, Price: 20.0},
+
+		HappyHourStudent{HourStart: 9, HourEnd: 11, Base: 10.0, Discount: 2.0},
+	)
+
 	validator := UserValidator{}
-	costCalc := CostCalculator{}
 	generator := CardGenerator{}
 	repo := NewPgRepository("postgres://user:pass@localhost:5432/biblioteca?sslmode=disable")
 	notifier := EmailNotifier{
@@ -220,10 +271,8 @@ func main() {
 	}
 	printer := Printer{printerName: "Printer-Thermal-001"}
 
-	// Orquestador SRP
-	gestor := NewGestorCarneService(validator, costCalc, generator, repo, notifier, printer)
+	gestor := NewGestorCarneService(validator, pricing, generator, repo, notifier, printer)
 
-	// Ejemplo
 	usuario := Usuario{
 		ID:        "U-001",
 		Nombres:   "Ana",
