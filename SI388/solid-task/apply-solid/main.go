@@ -38,7 +38,15 @@ type Carne struct {
 	Contenido   []byte
 }
 
-// ------------------------- Abstracciones (LSP/ISP) --------------------------
+// ------------------------- Abstracciones (LSP/ISP/DIP) ----------------------
+
+// Abstracción de tiempo (DIP)
+type Clock interface {
+	Now() time.Time
+}
+type RealClock struct{}
+
+func (RealClock) Now() time.Time { return time.Now() }
 
 type Validator interface {
 	Validate(ctx context.Context, u Usuario) error
@@ -52,7 +60,7 @@ type CardGenerator interface {
 	Generate(ctx context.Context, u Usuario, costo float64) (Carne, error)
 }
 
-// ISP aplicado: interfaces específicas por responsabilidad de persistencia
+// ISP aplicado: repositorios específicos
 type UserRepository interface {
 	SaveUser(ctx context.Context, u Usuario) error
 }
@@ -104,7 +112,9 @@ func (s FlatPriceStrategy) Calculate(_ context.Context, _ Usuario) (float64, err
 	return s.Price, nil
 }
 
+// HappyHourStudent ahora depende de Clock (DIP) y no de time.Now directo
 type HappyHourStudent struct {
+	Clock     Clock
 	HourStart int
 	HourEnd   int // no inclusivo
 	Base      float64
@@ -113,9 +123,9 @@ type HappyHourStudent struct {
 
 func (s HappyHourStudent) Supports(t TipoUsuario) bool { return t == TipoPregrado }
 func (s HappyHourStudent) Calculate(_ context.Context, _ Usuario) (float64, error) {
-	now := time.Now().Hour()
+	h := s.Clock.Now().Hour()
 	price := s.Base
-	if now >= s.HourStart && now < s.HourEnd {
+	if h >= s.HourStart && h < s.HourEnd {
 		if s.Discount > price {
 			price = 0
 		} else {
@@ -142,29 +152,35 @@ func (c *CompositePriceCalculator) Calculate(ctx context.Context, u Usuario) (fl
 	return 0, fmt.Errorf("no hay estrategia de precio para el tipo: %s", u.Tipo)
 }
 
-// 3) Generadores de carné (LSP)
-type PDFCardGenerator struct{}
+// 3) Generadores de carné (LSP) dependen de Clock (DIP)
+type PDFCardGenerator struct {
+	Clock Clock
+}
 
-func (PDFCardGenerator) Generate(_ context.Context, u Usuario, costo float64) (Carne, error) {
+func (g PDFCardGenerator) Generate(_ context.Context, u Usuario, costo float64) (Carne, error) {
+	now := g.Clock.Now()
 	card := Carne{
-		Numero:      fmt.Sprintf("C-%s-%d", u.ID, time.Now().Unix()),
+		Numero:      fmt.Sprintf("C-%s-%d", u.ID, now.Unix()),
 		Propietario: u,
 		Costo:       costo,
-		EmitidoEn:   time.Now(),
+		EmitidoEn:   now,
 		Contenido:   []byte("%PDF-1.7\n... (PDF del carné simulado) ...\n%%EOF\n"),
 	}
 	fmt.Printf("[GEN/PDF] Carné %s para %s %s (S/ %.2f)\n", card.Numero, u.Nombres, u.Apellidos, costo)
 	return card, nil
 }
 
-type JSONCardGenerator struct{}
+type JSONCardGenerator struct {
+	Clock Clock
+}
 
-func (JSONCardGenerator) Generate(_ context.Context, u Usuario, costo float64) (Carne, error) {
+func (g JSONCardGenerator) Generate(_ context.Context, u Usuario, costo float64) (Carne, error) {
+	now := g.Clock.Now()
 	card := Carne{
-		Numero:      fmt.Sprintf("C-%s-%d", u.ID, time.Now().Unix()),
+		Numero:      fmt.Sprintf("C-%s-%d", u.ID, now.Unix()),
 		Propietario: u,
 		Costo:       costo,
-		EmitidoEn:   time.Now(),
+		EmitidoEn:   now,
 	}
 	payload := map[string]any{
 		"numero":      card.Numero,
@@ -179,7 +195,6 @@ func (JSONCardGenerator) Generate(_ context.Context, u Usuario, costo float64) (
 }
 
 // 4) Repositorios (LSP + ISP)
-// Un repositorio que implementa AMBOS contratos específicos:
 type PgRepository struct{ pgDSN string }
 
 func NewPgRepository(dsn string) PgRepository { return PgRepository{pgDSN: dsn} }
@@ -196,7 +211,7 @@ func (r PgRepository) SaveCard(_ context.Context, c Carne) error {
 	return nil
 }
 
-// También podemos tener implementaciones separadas si se desea:
+// Implementaciones en memoria (útiles para tests)
 type MemoryUserRepo struct{ users []Usuario }
 
 func (m *MemoryUserRepo) SaveUser(_ context.Context, u Usuario) error {
@@ -248,7 +263,7 @@ func (DryRunPrinter) Print(_ context.Context, c Carne) error {
 
 // ------------------------- Orquestador (Caso de uso) ------------------------
 
-// El servicio depende de interfaces PEQUEÑAS (ISP) y sustituibles (LSP).
+// El servicio (alto nivel) depende de ABSTRACCIONES (DIP/ISP), no de detalles.
 type GestorCarneService struct {
 	validator Validator
 	pricing   PriceCalculator
@@ -294,7 +309,7 @@ func (s GestorCarneService) ProcesarSolicitud(ctx context.Context, u Usuario) (C
 	if err != nil {
 		return Carne{}, fmt.Errorf("generación de carné falló: %w", err)
 	}
-	// 4) Persistir usando interfaces específicas (ISP)
+	// 4) Persistir (interfaces específicas)
 	if err := s.userRepo.SaveUser(ctx, u); err != nil {
 		return Carne{}, fmt.Errorf("persistencia de usuario falló: %w", err)
 	}
@@ -317,32 +332,36 @@ func (s GestorCarneService) ProcesarSolicitud(ctx context.Context, u Usuario) (C
 
 func main() {
 	ctx := context.Background()
+	clock := RealClock{} // detalle inyectado a quienes necesiten tiempo
 
+	// OCP: estrategias fácilmente extensibles
 	pricing := NewCompositePriceCalculator(
 		FlatPriceStrategy{Supported: TipoPregrado, Price: 10.0},
 		FlatPriceStrategy{Supported: TipoPosgrado, Price: 12.0},
 		FlatPriceStrategy{Supported: TipoDocente, Price: 8.0},
 		FlatPriceStrategy{Supported: TipoAdmin, Price: 7.0},
 		FlatPriceStrategy{Supported: TipoExterno, Price: 20.0},
-		HappyHourStudent{HourStart: 9, HourEnd: 11, Base: 10.0, Discount: 2.0},
+		// HappyHour con Clock inyectado (DIP)
+		HappyHourStudent{Clock: clock, HourStart: 9, HourEnd: 11, Base: 10.0, Discount: 2.0},
 	)
 
 	validator := UserValidator{}
-	generator := PDFCardGenerator{} // o JSONCardGenerator{}
+	// CardGenerator con Clock inyectado (DIP)
+	generator := PDFCardGenerator{Clock: clock} // o JSONCardGenerator{Clock: clock}
 
+	// Repositorios (ISP): puedes elegir implementación sin tocar el servicio
 	pgRepo := NewPgRepository("postgres://user:pass@localhost:5432/biblioteca?sslmode=disable")
-	// También podrías usar repos separados (ISP):
-	// userRepo := &MemoryUserRepo{}
-	// cardRepo := &MemoryCardRepo{}
-	// y pasar cada uno al servicio. Aquí usamos pgRepo para ambos roles:
 	var userRepo UserRepository = pgRepo
 	var cardRepo CardRepository = pgRepo
+	// O bien en memoria:
+	// userRepo := &MemoryUserRepo{}
+	// cardRepo := &MemoryCardRepo{}
 
 	notifier := EmailNotifier{smtpHost: "smtp.unsch.edu.pe:587", smtpUser: "no-reply@unsch.edu.pe", smtpPass: "secreto-super-seguro"}
-	// notifier := NullNotifier{} // sustituto válido
+	// notifier := NullNotifier{}
 
 	printer := ThermalPrinter{name: "Printer-Thermal-001"}
-	// printer := DryRunPrinter{} // sustituto válido
+	// printer := DryRunPrinter{}
 
 	gestor := NewGestorCarneService(validator, pricing, generator, userRepo, cardRepo, notifier, printer)
 
@@ -352,7 +371,7 @@ func main() {
 		Apellidos: "Quispe",
 		Email:     "ana.quispe@unsch.edu.pe",
 		Tipo:      TipoPregrado,
-		VenceEn:   time.Now().AddDate(1, 0, 0),
+		VenceEn:   clock.Now().AddDate(1, 0, 0), // ¡también podrías usar Clock en más capas!
 	}
 
 	card, err := gestor.ProcesarSolicitud(ctx, usuario)
