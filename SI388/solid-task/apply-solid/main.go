@@ -38,7 +38,7 @@ type Carne struct {
 	Contenido   []byte
 }
 
-// ------------------------- Abstracciones (LSP/DIP) --------------------------
+// ------------------------- Abstracciones (LSP/ISP) --------------------------
 
 type Validator interface {
 	Validate(ctx context.Context, u Usuario) error
@@ -52,8 +52,11 @@ type CardGenerator interface {
 	Generate(ctx context.Context, u Usuario, costo float64) (Carne, error)
 }
 
-type Repository interface {
+// ISP aplicado: interfaces específicas por responsabilidad de persistencia
+type UserRepository interface {
 	SaveUser(ctx context.Context, u Usuario) error
+}
+type CardRepository interface {
 	SaveCard(ctx context.Context, c Carne) error
 }
 
@@ -139,7 +142,7 @@ func (c *CompositePriceCalculator) Calculate(ctx context.Context, u Usuario) (fl
 	return 0, fmt.Errorf("no hay estrategia de precio para el tipo: %s", u.Tipo)
 }
 
-// 3) Generadores de carné (LSP: PDF y JSON son sustituibles)
+// 3) Generadores de carné (LSP)
 type PDFCardGenerator struct{}
 
 func (PDFCardGenerator) Generate(_ context.Context, u Usuario, costo float64) (Carne, error) {
@@ -169,13 +172,14 @@ func (JSONCardGenerator) Generate(_ context.Context, u Usuario, costo float64) (
 		"costo":       card.Costo,
 		"emitido_en":  card.EmitidoEn.Format(time.RFC3339),
 	}
-	b, _ := json.Marshal(payload) // contrato: siempre retorna contenido válido
+	b, _ := json.Marshal(payload)
 	card.Contenido = b
 	fmt.Printf("[GEN/JSON] Carné %s para %s %s (S/ %.2f)\n", card.Numero, u.Nombres, u.Apellidos, costo)
 	return card, nil
 }
 
-// 4) Repositorios (LSP: Postgres y Memory son sustituibles)
+// 4) Repositorios (LSP + ISP)
+// Un repositorio que implementa AMBOS contratos específicos:
 type PgRepository struct{ pgDSN string }
 
 func NewPgRepository(dsn string) PgRepository { return PgRepository{pgDSN: dsn} }
@@ -192,23 +196,24 @@ func (r PgRepository) SaveCard(_ context.Context, c Carne) error {
 	return nil
 }
 
-type MemoryRepository struct {
-	users []Usuario
-	cards []Carne
-}
+// También podemos tener implementaciones separadas si se desea:
+type MemoryUserRepo struct{ users []Usuario }
 
-func (m *MemoryRepository) SaveUser(_ context.Context, u Usuario) error {
+func (m *MemoryUserRepo) SaveUser(_ context.Context, u Usuario) error {
 	m.users = append(m.users, u)
-	fmt.Printf("[MEM] guardado usuario id=%s email=%s\n", u.ID, u.Email)
-	return nil
-}
-func (m *MemoryRepository) SaveCard(_ context.Context, c Carne) error {
-	m.cards = append(m.cards, c)
-	fmt.Printf("[MEM] guardado carné numero=%s costo=%.2f\n", c.Numero, c.Costo)
+	fmt.Printf("[MEM-U] guardado usuario id=%s email=%s\n", u.ID, u.Email)
 	return nil
 }
 
-// 5) Notificadores (LSP: Email y Null son sustituibles)
+type MemoryCardRepo struct{ cards []Carne }
+
+func (m *MemoryCardRepo) SaveCard(_ context.Context, c Carne) error {
+	m.cards = append(m.cards, c)
+	fmt.Printf("[MEM-C] guardado carné numero=%s costo=%.2f\n", c.Numero, c.Costo)
+	return nil
+}
+
+// 5) Notificadores (LSP)
 type EmailNotifier struct {
 	smtpHost string
 	smtpUser string
@@ -223,12 +228,9 @@ func (n EmailNotifier) Send(_ context.Context, to, subject, body string) error {
 
 type NullNotifier struct{}
 
-func (NullNotifier) Send(_ context.Context, _ string, _ string, _ string) error {
-	// Implementación nula: cumple el contrato sin efectos secundarios.
-	return nil
-}
+func (NullNotifier) Send(_ context.Context, _ string, _ string, _ string) error { return nil }
 
-// 6) Impresoras (LSP: Térmica y DryRun son sustituibles)
+// 6) Impresoras (LSP)
 type ThermalPrinter struct{ name string }
 
 func (p ThermalPrinter) Print(_ context.Context, c Carne) error {
@@ -246,11 +248,13 @@ func (DryRunPrinter) Print(_ context.Context, c Carne) error {
 
 // ------------------------- Orquestador (Caso de uso) ------------------------
 
+// El servicio depende de interfaces PEQUEÑAS (ISP) y sustituibles (LSP).
 type GestorCarneService struct {
 	validator Validator
 	pricing   PriceCalculator
 	generator CardGenerator
-	repo      Repository
+	userRepo  UserRepository
+	cardRepo  CardRepository
 	notifier  Notifier
 	printer   Printer
 }
@@ -259,7 +263,8 @@ func NewGestorCarneService(
 	validator Validator,
 	pricing PriceCalculator,
 	generator CardGenerator,
-	repo Repository,
+	userRepo UserRepository,
+	cardRepo CardRepository,
 	notifier Notifier,
 	printer Printer,
 ) GestorCarneService {
@@ -267,7 +272,8 @@ func NewGestorCarneService(
 		validator: validator,
 		pricing:   pricing,
 		generator: generator,
-		repo:      repo,
+		userRepo:  userRepo,
+		cardRepo:  cardRepo,
 		notifier:  notifier,
 		printer:   printer,
 	}
@@ -288,11 +294,11 @@ func (s GestorCarneService) ProcesarSolicitud(ctx context.Context, u Usuario) (C
 	if err != nil {
 		return Carne{}, fmt.Errorf("generación de carné falló: %w", err)
 	}
-	// 4) Persistir
-	if err := s.repo.SaveUser(ctx, u); err != nil {
+	// 4) Persistir usando interfaces específicas (ISP)
+	if err := s.userRepo.SaveUser(ctx, u); err != nil {
 		return Carne{}, fmt.Errorf("persistencia de usuario falló: %w", err)
 	}
-	if err := s.repo.SaveCard(ctx, card); err != nil {
+	if err := s.cardRepo.SaveCard(ctx, card); err != nil {
 		return Carne{}, fmt.Errorf("persistencia de carné falló: %w", err)
 	}
 	// 5) Notificar (no crítico)
@@ -312,32 +318,33 @@ func (s GestorCarneService) ProcesarSolicitud(ctx context.Context, u Usuario) (C
 func main() {
 	ctx := context.Background()
 
-	// OCP: fácilmente extensible con nuevas estrategias
 	pricing := NewCompositePriceCalculator(
 		FlatPriceStrategy{Supported: TipoPregrado, Price: 10.0},
 		FlatPriceStrategy{Supported: TipoPosgrado, Price: 12.0},
 		FlatPriceStrategy{Supported: TipoDocente, Price: 8.0},
 		FlatPriceStrategy{Supported: TipoAdmin, Price: 7.0},
 		FlatPriceStrategy{Supported: TipoExterno, Price: 20.0},
-		// Extensión opcional
 		HappyHourStudent{HourStart: 9, HourEnd: 11, Base: 10.0, Discount: 2.0},
 	)
 
-	// LSP en acción: prueba con diferentes implementaciones sin cambiar el servicio
 	validator := UserValidator{}
-	// Puedes alternar entre PDFCardGenerator{} y JSONCardGenerator{} sin romper nada.
 	generator := PDFCardGenerator{} // o JSONCardGenerator{}
-	// Puedes alternar entre repositorio real simulado o en memoria.
-	repo := NewPgRepository("postgres://user:pass@localhost:5432/biblioteca?sslmode=disable")
-	// repoMem := &MemoryRepository{} // <- sustituto válido
-	// Puedes alternar entre notificador real o nulo.
-	notifier := EmailNotifier{smtpHost: "smtp.unsch.edu.pe:587", smtpUser: "no-reply@unsch.edu.pe", smtpPass: "secreto-super-seguro"}
-	// notifier := NullNotifier{} // <- sustituto válido
-	// Puedes alternar entre impresora real o dry-run.
-	printer := ThermalPrinter{name: "Printer-Thermal-001"}
-	// printer := DryRunPrinter{} // <- sustituto válido
 
-	gestor := NewGestorCarneService(validator, pricing, generator, repo, notifier, printer)
+	pgRepo := NewPgRepository("postgres://user:pass@localhost:5432/biblioteca?sslmode=disable")
+	// También podrías usar repos separados (ISP):
+	// userRepo := &MemoryUserRepo{}
+	// cardRepo := &MemoryCardRepo{}
+	// y pasar cada uno al servicio. Aquí usamos pgRepo para ambos roles:
+	var userRepo UserRepository = pgRepo
+	var cardRepo CardRepository = pgRepo
+
+	notifier := EmailNotifier{smtpHost: "smtp.unsch.edu.pe:587", smtpUser: "no-reply@unsch.edu.pe", smtpPass: "secreto-super-seguro"}
+	// notifier := NullNotifier{} // sustituto válido
+
+	printer := ThermalPrinter{name: "Printer-Thermal-001"}
+	// printer := DryRunPrinter{} // sustituto válido
+
+	gestor := NewGestorCarneService(validator, pricing, generator, userRepo, cardRepo, notifier, printer)
 
 	usuario := Usuario{
 		ID:        "U-001",
