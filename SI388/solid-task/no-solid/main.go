@@ -137,7 +137,8 @@ func (g *GestorCarne) GenerarCarne(ctx context.Context, u Usuario, costo float64
 		EmitidoEn:   time.Now(),
 		Contenido:   contenido,
 	}
-	fmt.Printf("[GEN] Carné generado: %s para %s %s (S/ %.2f)\n", c.Numero, u.Nombres, u.Apellidos, costo)
+	fmt.Printf("[GEN] Carné generado: %s para %s %s (S/ %.2f)\n",
+		c.Numero, u.Nombres, u.Apellidos, costo)
 	return c, nil
 }
 
