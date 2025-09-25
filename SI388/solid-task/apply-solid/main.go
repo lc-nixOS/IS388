@@ -39,7 +39,6 @@ type Carne struct {
 
 // ------------------------ Componentes con SRP -------------------------------
 
-// 1) Validador: SOLO valida datos de Usuario.
 type UserValidator struct{}
 
 func (UserValidator) Validate(_ context.Context, u Usuario) error {
@@ -143,8 +142,6 @@ func (p Printer) Print(_ context.Context, c Carne) error {
 
 // ------------------------- Orquestador (Caso de uso) ------------------------
 
-// GestorCarneService: SOLO orquesta el flujo completo,
-// reutilizando componentes con una única responsabilidad cada uno.
 type GestorCarneService struct {
 	validator UserValidator
 	costCalc  CostCalculator
