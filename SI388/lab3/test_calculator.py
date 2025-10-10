@@ -33,3 +33,9 @@ class TestCalculator:
     def test_potencia_positiva(self):
         assert self.calc.potencia(2, 3) == 8
         assert self.calc.potencia(5, 2) == 25
+
+    def test_potencia_negativa(self):
+        assert pytest.approx(self.calc.potencia(2, -3)) == 0.125
+
+
+# pytest --cov=calculator --cov-report=term-missing
