@@ -28,14 +28,17 @@ class TestCalculator:
 
     def test_multiplicar(self):
         assert self.calc.multiplicar(2, 3) == 6
+        assert self.calc.multiplicar(0, 5) == 0
         assert self.calc.multiplicar(-1, 1) == -1
 
     def test_potencia_positiva(self):
         assert self.calc.potencia(2, 3) == 8
+        assert self.calc.potencia(2, 0) == 1
         assert self.calc.potencia(5, 2) == 25
 
     def test_potencia_negativa(self):
         assert pytest.approx(self.calc.potencia(2, -3)) == 0.125
+        assert pytest.approx(self.calc.potencia(5, -2)) == 0.04
 
 
 # pytest --cov=calculator --cov-report=term-missing
