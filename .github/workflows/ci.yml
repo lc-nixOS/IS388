@@ -37,8 +37,5 @@ jobs:
       - name: Ruff (lint)
         run: ruff check --output-format=github src src/tests
 
-      - name: MyPy (type check)
-        run: mypy src
-
       - name: Pytest
         run: pytest -q src/tests

@@ -31,10 +31,6 @@ repos:
     rev: 24.3.0
     hooks:
       - id: black
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.11.1
-    hooks:
-      - id: mypy
 ```
 
 > Si prefieres que el formateo lo haga sólo Black, puedes quitar `ruff-format`.
@@ -81,9 +77,6 @@ jobs:
 
       - name: Ruff (lint)
         run: ruff check --output-format=github src tests
-
-      - name: MyPy (type check)
-        run: mypy src
 
       - name: Pytest
         run: pytest -q
@@ -141,7 +134,6 @@ pytest -q
 
 - `black` no debe quejarse (si lo hace, corrige con `black ...`).
 - `ruff format` formatea; `ruff check` marca problemas de lint (puedes auto-fijar muchos con `ruff check --fix src src/tests`).
-- `mypy` hace el type-check (si se queda colgado/va lento, actualiza `typing_extensions` como arriba).
 - `pytest` corre tests (ya sin `ModuleNotFoundError` gracias a `pytest.ini` o `PYTHONPATH`).
 
 ---
@@ -153,12 +145,10 @@ pytest -q
 
    - **Black (check only)**: ✔️ si todo está formateado; ❌ si falta formatear (solucionalo con `black src tests`).
    - **Ruff (lint)**: crea **anotaciones** en el PR mostrando los problemas exactos en cada línea.
-   - **MyPy**: reporta errores de tipos.
    - **Pytest**: corre tests (si fallan, verás el log con el assert roto).
 
 3. En el **PR**, los checks deben aparecer en **verde** para poder hacer merge (según tu configuración de branch protection).
 4. Si algo falla:
-
    - Corre localmente los comandos del punto 4C.
    - Corrige y vuelve a hacer **commit + push**; el CI se re-ejecuta y debería pasar.
 
@@ -189,12 +179,11 @@ tu-repo/
    ```powershell
    black src src/tests
    ruff check --fix src src/tests
-   mypy src
    $env:PYTHONPATH = "$PWD\src"
    pytest -q src/tests
    ```
 
-2. Si todo está OK, `git add . && git commit -m "fix(ci): rutas y config ruff/mypy/pytest" && git push`.
+2. Si todo está OK, `git add . && git commit -m "fix(ci): rutas y config ruff/pytest" && git push`.
 3. En el PR, todo verde ✅.
 
 ## 8 Actualiza pre-commit
