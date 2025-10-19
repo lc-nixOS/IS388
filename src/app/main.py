@@ -1,13 +1,19 @@
-from __future__ import annotations
+class Calculator:
+    def add(self, a, b):
+        return a + b
 
-from src.app.utils import add, greet
+    def subtract(self, a, b):
+        return a - b
 
+    def multiply(self, a, b):
+        return a * b
 
-def run() -> None:
-    total = add(2, 3)
-    mensaje = greet("Mundo")
-    print(mensaje, "-", "Total:", total)
+    def divide(self, a, b):
+        if b == 0:
+            raise ValueError("Cannot divide by zero")
+        return a / b
 
-
-if __name__ == "__main__":
-    run()
+    def power(self, a, b):
+        if b < 0:
+            return 1 / (a ** abs(b))
+        return a**b
