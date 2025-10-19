@@ -116,7 +116,7 @@ pre-commit run --all-files
 
 ```bash
 # Opción 1: rutas explícitas
-black src src/tests
+Activate.ps1
 ruff format src src/tests
 ruff check src src/tests
 pytest -q src/tests
@@ -181,6 +181,9 @@ tu-repo/
    ruff check --fix src src/tests
    $env:PYTHONPATH = "$PWD\src"
    pytest -q src/tests
+
+   ---
+   pytest --cov=src.calculator --cov-report=term-missing
    ```
 
 2. Si todo está OK, `git add . && git commit -m "fix(ci): rutas y config ruff/pytest" && git push`.

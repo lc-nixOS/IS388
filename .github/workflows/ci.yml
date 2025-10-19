@@ -37,5 +37,6 @@ jobs:
       - name: Ruff (lint)
         run: ruff check --output-format=github src src/tests
 
-      - name: Pytest
-        run: pytest -q src/tests
+      - name: Run Pytest with coverage
+        run: |
+          pytest --cov=src/app --cov-report=term-missing -v
