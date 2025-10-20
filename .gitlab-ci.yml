@@ -1,0 +1,76 @@
+image: python:3.10
+
+stages:
+  - lint
+  - test
+
+variables:
+  PYTHONPATH: "$CI_PROJECT_DIR/src"
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  key: "pip-${CI_COMMIT_REF_SLUG}"
+  paths:
+    - .cache/pip/
+
+.default_rules:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: "$CI_COMMIT_BRANCH =~ /^(main|master)$/"
+
+.before_install: &before_install
+  before_script:
+    - python -V
+    - python -m pip install --upgrade pip
+    - |
+      if [ -f requirements.txt ]; then
+        pip install -r requirements.txt
+      else
+        # Por si Black/Ruff/Pytest no están en requirements.txt
+        pip install black ruff pytest pytest-cov
+      fi
+
+black:
+  stage: lint
+  <<: *before_install
+  script:
+    - black --check src src/tests
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: "$CI_COMMIT_BRANCH =~ /^(main|master)$/"
+
+ruff:
+  stage: lint
+  <<: *before_install
+  script:
+    - ruff check --output-format=github src src/tests
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: "$CI_COMMIT_BRANCH =~ /^(main|master)$/"
+  artifacts:
+    when: always
+    paths:
+      - ruff-report.txt
+    expire_in: 1 week
+
+tests:
+  stage: test
+  <<: *before_install
+  script:
+    - pytest --cov=src/app --cov-report=term-missing --cov-report=xml:coverage.xml -v
+  artifacts:
+    when: always
+    reports:
+      junit: junit.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    paths:
+      - coverage.xml
+      - junit.xml
+    expire_in: 1 week
+  after_script:
+    - echo "Skipping junit if not generated explicitly"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: "$CI_COMMIT_BRANCH =~ /^(main|master)$/"
